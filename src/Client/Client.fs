@@ -9,7 +9,10 @@ open Fable.React.Props
 open Fable.DateFunctions
 open System
 
-// A type that stores a raw value and a "parsed" version as 'T
+/// A type that stores a raw value and a "parsed" version as 'T. In this demo, we use the "raw"
+/// value to bind back again to the input control, whilst storing the "parsed" value as an option.
+/// The alternative is to simply store the DateTime as an option and in the view "regenerate" the
+/// raw string based on the DateTime value.
 type RawOption<'T> =
     { Raw : string
       Parsed : 'T option }
@@ -30,7 +33,9 @@ type Msg =
 let init() =
     { IndirectDate = RawOption.empty; DirectDate = None }, Cmd.none
 
+/// Safely parses a string into a DateTime
 let safeParse = function "" | null -> None | s -> try DateTime.Parse s |> Some with | _ -> None
+/// Converts a DateTime into a string suitable for the date input control. Uses the date-fns package.
 let toDateFormat (d:DateTime) = d.Format "yyyy-MM-dd"
 
 let update msg model =
