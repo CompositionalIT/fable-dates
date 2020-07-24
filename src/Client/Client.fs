@@ -6,55 +6,61 @@ open Elmish.React
 open Elmish.HMR
 open Fable.React
 open Fable.React.Props
+open Fable.DateFunctions
 open System
 
+// A type that stores a raw value and a "parsed" version as 'T
+type RawOption<'T> =
+    { Raw : string
+      Parsed : 'T option }
+module RawOption =
+    let empty = { Raw = ""; Parsed = None }
+    let tryParse parser v =
+        { Raw = v
+          Parsed = try v |> parser with _ -> None }
+
 type Model =
-    { IndirectDateRaw : string
+    { IndirectDate : DateTime RawOption
       DirectDate : DateTime option }
-    member this.IndirectDate =
-        match this.IndirectDateRaw with
-        | "" | null -> None
-        | _ ->
-            try this.IndirectDateRaw |> System.DateTime.Parse |> Some
-            with _ -> None
 
 type Msg =
-    | IndirectDateChanged of string
+    | IndirectDateChanged of DateTime RawOption
     | DirectDateChanged of DateTime option
 
-module CrazySerialization =
-    type System.Int32 with
-        member this.Pad digits =
-            let output = this.ToString()
-            (String.replicate (digits - output.Length) "0") + output
-
-    type System.DateTime with
-        member this.ToStringCorrect() =
-            sprintf "%s-%s-%s" (this.Year.Pad 4) (this.Month.Pad 2) (this.Day.Pad 2)
-
-open CrazySerialization
-
 let init() =
-    { IndirectDateRaw = ""; DirectDate = None }, Cmd.none
+    { IndirectDate = RawOption.empty; DirectDate = None }, Cmd.none
+
+let safeParse = function "" | null -> None | s -> try DateTime.Parse s |> Some with | _ -> None
+let toDateFormat (d:DateTime) = d.Format "yyyy-MM-dd"
 
 let update msg model =
     match msg with
-    | IndirectDateChanged v -> { model with IndirectDateRaw = v }, Cmd.none
+    | IndirectDateChanged v -> { model with IndirectDate = v }, Cmd.none
     | DirectDateChanged v -> { model with DirectDate = v }, Cmd.none
 
 let view model dispatch =
     div [ Style [ TextAlign TextAlignOptions.Center; Padding 40 ] ] [
         h2 [] [ str "INDIRECT (VIA STRING)" ]
-        div [] [ str ("MODEL STRING: " + model.IndirectDateRaw) ]
-        div [] [ str ("MODEL DATETIME: " + (model.IndirectDate |> Option.map string |> Option.defaultValue "(NONE)")) ]
-        div [] [ input [ HTMLAttr.Type "date"; Value model.IndirectDateRaw; OnChange (fun v -> dispatch (IndirectDateChanged v.Value)) ] ]
+        div [] [ str ("MODEL STRING: " + model.IndirectDate.Raw) ]
+        div [] [ str ("MODEL DATETIME: " + (model.IndirectDate.Parsed |> Option.map string |> Option.defaultValue "(NONE)")) ]
+        div [] [
+            input [
+                HTMLAttr.Type "date"
+                Value model.IndirectDate.Raw
+                OnChange (fun v -> v.Value |> RawOption.tryParse safeParse |> IndirectDateChanged |> dispatch) ]
+        ]
 
         h2 [] [ str "DIRECT (DATETIME)" ]
-        div [] [ str ("MODEL DATETIME (SERIALIZED): " + (model.DirectDate |> Option.map(fun r -> r.ToStringCorrect()) |> Option.defaultValue "(NONE)")) ]
-        div [] [ str ("MODEL DATETIME: " + (model.DirectDate |> Option.map(fun r -> r.ToString()) |> Option.defaultValue "(NONE)")) ]
-        div [] [ input [ HTMLAttr.Type "date"; Value (model.DirectDate |> Option.map(fun d -> d.ToStringCorrect()) |> Option.defaultValue ""); OnChange (fun v -> if v.Value = "" then dispatch (DirectDateChanged None) else dispatch (DirectDateChanged (DateTime.Parse v.Value |> Some))) ] ]
+        div [] [ str ("MODEL DATETIME (SERIALIZED): " + (model.DirectDate |> Option.map toDateFormat |> Option.defaultValue "(NONE)")) ]
+        div [] [ str ("MODEL DATETIME: " + (model.DirectDate |> Option.map string |> Option.defaultValue "(NONE)")) ]
+        div [] [
+            input [
+                HTMLAttr.Type "date"
+                Value (model.DirectDate |> Option.map toDateFormat |> Option.defaultValue "")
+                OnChange (fun v -> v.Value |> safeParse |> DirectDateChanged |> dispatch)
+            ]
+        ]
     ]
-
 
 Program.mkProgram init update view
 |> Program.withConsoleTrace
